@@ -4,6 +4,7 @@ import android.graphics.Color
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
+import androidx.viewpager2.widget.ViewPager2
 import com.naver.maps.geometry.LatLng
 import com.naver.maps.map.*
 import com.naver.maps.map.overlay.Marker
@@ -24,10 +25,15 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private lateinit var naverMap: NaverMap
     private lateinit var locationSource: FusedLocationSource
-
     private val mapView: MapView by lazy {
         findViewById(R.id.mapView)
     }
+
+    private val viewPager: ViewPager2 by lazy {
+        findViewById(R.id.houseViewPager)
+    }
+
+    private val viewPagerAdapter = HouseViewPagerAdapter()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +47,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         // 메인액티비티가 OnMapReadyCallback 의 구현체라고도 할 수 있다
         // 때문에 아래에 this 가 가능
         mapView.getMapAsync(this)
+
+        viewPager.adapter = viewPagerAdapter
     }
 
     override fun onMapReady(map: NaverMap) {
@@ -57,13 +65,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
         locationSource = FusedLocationSource(this@MainActivity, LOCATION_PERMISSION_REQUEST_CODE)
         naverMap.locationSource = locationSource
-
-//        val marker = Marker()
-//        marker.position = LatLng(37.623577, 126.825321)
-//        marker.map = naverMap // 다양한 다른 기능들은 네이버 공식 가이드라인에..
-//        marker.icon = MarkerIcons.BLACK
-//        marker.iconTintColor = Color.YELLOW
-
 
         getHouseListFromAPI()
     }
@@ -85,6 +86,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
                         response.body()?.let { dto ->
                             updateMarkers(dto.items)
+                            viewPagerAdapter.submitList(dto.items)
                         }
                     }
 
@@ -101,7 +103,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             val marker = Marker()
             marker.position = LatLng(house.lat, house.lng)
             // todo 마커클릭리스터
-            marker.map = naverMap
+            marker.map = naverMap // 이외에 다양한 기능들은 공식문서참조
             marker.tag = house.id
             marker.icon = MarkerIcons.BLACK
             //marker.iconTintColor = Color.RED
