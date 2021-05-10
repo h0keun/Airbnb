@@ -1,11 +1,19 @@
 package com.airbnb
 
+import android.graphics.Color
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.util.Log
 import com.naver.maps.geometry.LatLng
 import com.naver.maps.map.*
 import com.naver.maps.map.overlay.Marker
 import com.naver.maps.map.util.FusedLocationSource
+import com.naver.maps.map.util.MarkerIcons
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 
 //네이버 맵 api 를 이용하는 두가지 경우가 있는데
 //하나는 프래그먼트로 하나는 맵뷰로 둘의 차이는 프래그먼트는
@@ -41,7 +49,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         naverMap.maxZoom = 15.0
         naverMap.minZoom = 4.0
 
-        val cameraUpdate = CameraUpdate.scrollTo(LatLng(37.497885, 127.027512))
+        val cameraUpdate = CameraUpdate.scrollTo(LatLng(37.631467, 126.831822))
         naverMap.moveCamera(cameraUpdate)
 
         val uiSetting = naverMap.uiSettings
@@ -50,12 +58,61 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         locationSource = FusedLocationSource(this@MainActivity, LOCATION_PERMISSION_REQUEST_CODE)
         naverMap.locationSource = locationSource
 
-        val marker = Marker()
-        marker.position = LatLng(37.623577, 126.825321)
-        marker.map = naverMap // 다양한 다른 기능들은 네이버 공식 가이드라인에..
+//        val marker = Marker()
+//        marker.position = LatLng(37.623577, 126.825321)
+//        marker.map = naverMap // 다양한 다른 기능들은 네이버 공식 가이드라인에..
+//        marker.icon = MarkerIcons.BLACK
+//        marker.iconTintColor = Color.YELLOW
+
+
+        getHouseListFromAPI()
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    private fun getHouseListFromAPI() {
+        val retrofit = Retrofit.Builder()
+            .baseUrl("https://run.mocky.io/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+
+        retrofit.create(HouseService::class.java).also {
+            it.getHouseList()
+                .enqueue(object : Callback<HouseDto> {
+                    override fun onResponse(call: Call<HouseDto>, response: Response<HouseDto>) {
+                        if (response.isSuccessful.not()) {
+                            //실패처리구현
+                            return
+                        }
+
+                        response.body()?.let { dto ->
+                            updateMarkers(dto.items)
+                        }
+                    }
+
+                    override fun onFailure(call: Call<HouseDto>, t: Throwable) {
+                        // 실패처리구현
+                    }
+
+                })
+        }
+    }
+
+    private fun updateMarkers(house: List<HouseModel>) {
+        house.forEach { house ->
+            val marker = Marker()
+            marker.position = LatLng(house.lat, house.lng)
+            // todo 마커클릭리스터
+            marker.map = naverMap
+            marker.tag = house.id
+            marker.icon = MarkerIcons.BLACK
+            //marker.iconTintColor = Color.RED
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
         if (requestCode != LOCATION_PERMISSION_REQUEST_CODE) {
