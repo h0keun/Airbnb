@@ -1,16 +1,17 @@
 package com.airbnb
 
-import android.graphics.Color
+import android.annotation.SuppressLint
+import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.util.Log
-import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.naver.maps.geometry.LatLng
 import com.naver.maps.map.*
 import com.naver.maps.map.overlay.Marker
+import com.naver.maps.map.overlay.Overlay
 import com.naver.maps.map.util.FusedLocationSource
 import com.naver.maps.map.util.MarkerIcons
 import com.naver.maps.map.widget.LocationButtonView
@@ -25,7 +26,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 //생영주기를 신경쓰지 않아도 되지만 커스텀이 어렵
 //앱뷰는 여러 커스텀이 가능하지만 생명주기상 이슈가 있어서
 //아래처럼 직접 설정해주어야함함
-class MainActivity : AppCompatActivity(), OnMapReadyCallback {
+class MainActivity : AppCompatActivity(), OnMapReadyCallback, Overlay.OnClickListener {
 
     private lateinit var naverMap: NaverMap
     private lateinit var locationSource: FusedLocationSource
@@ -45,7 +46,19 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         findViewById(R.id.currentLocationButton)
     }
 
-    private val viewPagerAdapter = HouseViewPagerAdapter()
+    private val bottomSheetTitleTextView : TextView by lazy {
+        findViewById(R.id.bottomSheetTitleTextView)
+    }
+
+    private val viewPagerAdapter = HouseViewPagerAdapter(itemClicked = {
+        val intent = Intent()
+            .apply {
+                action = Intent.ACTION_SEND
+                putExtra(Intent.EXTRA_TEXT,"[여기 어떰?? 지금 예약해!!] \n 장소 : ${it.title} \n 가격 : ${it.price} \n 사진보기 : ${it.imgUrl}")
+                type = "text/plain"
+            }
+        startActivity(Intent.createChooser(intent, null))
+    })
     private val recyclerAdapter = HouseListAdapter()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -64,6 +77,19 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         viewPager.adapter = viewPagerAdapter
         recyclerView.adapter = recyclerAdapter
         recyclerView.layoutManager = LinearLayoutManager(this)
+
+        viewPager.registerOnPageChangeCallback(object: ViewPager2.OnPageChangeCallback(){
+
+            override fun onPageSelected(position: Int) {
+                super.onPageSelected(position)
+
+                val selectedHouseModel = viewPagerAdapter.currentList[position]
+                val cameraUpdate = CameraUpdate.scrollTo(LatLng(selectedHouseModel.lat, selectedHouseModel.lng))
+                    .animate(CameraAnimation.Easing)
+
+                naverMap.moveCamera(cameraUpdate)
+            }
+        })
     }
 
     override fun onMapReady(map: NaverMap) {
@@ -94,6 +120,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         retrofit.create(HouseService::class.java).also {
             it.getHouseList()
                 .enqueue(object : Callback<HouseDto> {
+                    @SuppressLint("SetTextI18n")
                     override fun onResponse(call: Call<HouseDto>, response: Response<HouseDto>) {
                         if (response.isSuccessful.not()) {
                             //실패처리구현
@@ -104,6 +131,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
                             updateMarkers(dto.items)
                             viewPagerAdapter.submitList(dto.items)
                             recyclerAdapter.submitList(dto.items)
+
+                            bottomSheetTitleTextView.text = "${dto.items.size}개의 숙소"
                         }
                     }
 
@@ -119,7 +148,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         house.forEach { house ->
             val marker = Marker()
             marker.position = LatLng(house.lat, house.lng)
-            // todo 마커클릭리스터
+            marker.onClickListener = this
+
             marker.map = naverMap // 이외에 다양한 기능들은 공식문서참조
             marker.tag = house.id
             marker.icon = MarkerIcons.BLACK
@@ -182,5 +212,17 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
     companion object {
         private const val LOCATION_PERMISSION_REQUEST_CODE = 1000
+    }
+
+    override fun onClick(overlay: Overlay): Boolean {
+        val selectedModel = viewPagerAdapter.currentList.firstOrNull {
+            it.id == overlay.tag
+        }
+        selectedModel?. let{
+            val position = viewPagerAdapter.currentList.indexOf(it)
+            viewPager.currentItem = position
+        }
+
+        return true
     }
 }
